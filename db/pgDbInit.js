@@ -1,4 +1,4 @@
-import { createObjectsTable } from "../features/objects/objectsRepository.js";
+import { createObjectsTable } from "../tables/objectModel.js";
 
 const createTables = async () => {
   try {
