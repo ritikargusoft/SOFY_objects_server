@@ -3,20 +3,20 @@ import * as objectRepository from "./objectsRepository.js";
 
 export async function getObjectByUuid(id) {
   const object = await objectRepository.getObjectByUuid(id);
-  if (!object) throw new AppError("Object not found", 400);
+  if (!object) throw new AppError("Object not found", 404);
   return object;
 }
 
 export async function getObjectById(id) {
   const object = await objectRepository.getObjectById(id);
-  if (!object) throw new AppError("Object not found", 400);
+  if (!object) throw new AppError("Object not found", 404);
   return object;
 }
 
 export async function getObjectByName(name) {
+  if (!name) throw new AppError("Missing name", 400);
   const object = await objectRepository.getObjectByName(name);
-  if (!object) throw new AppError("Object not found", 400);
-  return object;
+    return object;
 }
 
 export async function getAllObjects() {
@@ -25,8 +25,10 @@ export async function getAllObjects() {
 }
 
 export async function createObject(data) {
-  if (!data || !data.name) throw new AppError("Enter the name of a object", 400);
+  if (!data || !data.name) throw new AppError("Enter the name of an object", 400);
 
+  const name = data.name;
+  const description = data.description ?? null;
 
   const existing = await objectRepository.getObjectByName(name);
   if (existing) {
@@ -43,15 +45,24 @@ export async function createObject(data) {
 
 export async function updateObject(object_uuid, data) {
   if (!object_uuid) throw new AppError("Missing object identifier", 400);
+  if (!data) throw new AppError("Missing update payload", 400);
 
+  const name = data.name ?? null;
+  const description = data.description ?? null;
 
-  const object = await objectRepository.updateObject(object_uuid, payload);
-  if (!object) throw new AppError("Object not found", 400);
+  const object = await objectRepository.updateObject(object_uuid, {
+    name,
+    description,
+  });
+
+  if (!object) throw new AppError("Object not found", 404);
   return object;
 }
 
 export async function deleteObject(object_uuid) {
+  if (!object_uuid) throw new AppError("Missing object identifier", 400);
+
   const deleted = await objectRepository.deleteObject(object_uuid);
-  if (!deleted) throw new AppError("Object not found", 400);
+  if (!deleted) throw new AppError("Object not found", 404);
   return deleted;
 }
