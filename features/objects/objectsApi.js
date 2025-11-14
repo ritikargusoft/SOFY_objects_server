@@ -6,6 +6,7 @@ import {
   getObjectByUuid,
   updateObject,
 } from "./objectsController.js";
+
 const router = express.Router();
 
 router.post("/", createObject);
