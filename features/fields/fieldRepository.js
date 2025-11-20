@@ -1,5 +1,67 @@
 import pool from "../../db/connectDB.js";
 
+export async function insertFieldMetadata({
+  object_uuid,
+  name,
+  label,
+  description = null,
+  field_type,
+  field_order = 1,
+  created_by = "system",
+}) {
+  const q = `
+    INSERT INTO sph_object_fields
+      (object_uuid, name, label, description, field_type, field_order, created_by, created_at, last_updated_by, last_updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $7, NOW())
+    RETURNING field_uuid, field_id, object_uuid, name, label, description, field_type, field_order, created_by, created_at;
+  `;
+  const r = await pool.query(q, [
+    object_uuid,
+    name,
+    label,
+    description,
+    field_type,
+    field_order,
+    created_by,
+  ]);
+  return r.rows[0] ?? null;
+}
+
+export async function fieldNameExists(object_uuid, name) {
+  const q = `SELECT 1 FROM sph_object_fields WHERE object_uuid = $1 AND LOWER(name) = LOWER($2) LIMIT 1;`;
+  const r = await pool.query(q, [object_uuid, name]);
+  return r.rowCount > 0;
+}
+
+
+export async function getNextOrderForObject(object_uuid) {
+  const q = `SELECT COALESCE(MAX(field_order), 0) AS max_order FROM sph_object_fields WHERE object_uuid = $1;`;
+  const r = await pool.query(q, [object_uuid]);
+  return (r.rows[0]?.max_order ?? 0) + 1;
+}
+
+export async function getFieldsByObject(object_uuid) {
+  const q = `
+    SELECT field_uuid, field_id, field_order, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at
+    FROM sph_object_fields
+    WHERE object_uuid = $1
+    ORDER BY field_order, field_id;
+  `;
+  const r = await pool.query(q, [object_uuid]);
+  return r.rows;
+}
+
+export async function getFieldByUuid(field_uuid) {
+  const q = `
+    SELECT field_uuid, field_id, field_order, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at
+    FROM sph_object_fields
+    WHERE field_uuid = $1
+LIMIT 1;
+  `;
+  const r = await pool.query(q, [field_uuid]);
+  return r.rows;
+}
+
 export async function tableExists(tableName) {
   const q = `
     SELECT EXISTS (
@@ -11,60 +73,42 @@ export async function tableExists(tableName) {
   return r.rows[0].exists;
 }
 
-export async function createFieldsTable(tableName) {
+export async function createObjectDataTable(tableName) {
   const q = `
     CREATE TABLE IF NOT EXISTS "${tableName}" (
-      field_uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      field_id SERIAL UNIQUE NOT NULL,
-      field_order INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      label TEXT NOT NULL,
-      description TEXT,
-      type VARCHAR(50) NOT NULL,
+      record_uuid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      record_id SERIAL UNIQUE NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
+      created_by VARCHAR(255) DEFAULT 'system',
+      last_updated_at TIMESTAMP DEFAULT NOW(),
+      last_updated_by VARCHAR(255) DEFAULT 'system'
     );
   `;
   await pool.query(q);
 }
 
-export async function fieldNameExists(tableName, name) {
-  const q = `SELECT 1 FROM "${tableName}" WHERE LOWER(name) = LOWER($1) LIMIT 1;`;
-  const r = await pool.query(q, [name]);
-  return r.rowCount > 0;
-}
-
-export async function getNextOrder(tableName) {
-  const q = `SELECT COALESCE(MAX(field_order), 0) AS max_order FROM "${tableName}";`;
-  const r = await pool.query(q);
-  return (r.rows[0]?.max_order ?? 0) + 1;
-}
-
-export async function insertFieldRow(
-  tableName,
-  { field_order, name, label, description, type }
-) {
+export async function addColumnToObjectTable(tableName, columnName, sqlType) {
   const q = `
-    INSERT INTO "${tableName}" (field_order, name, label, description, type, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-    RETURNING field_uuid, field_id, field_order, name, label, description, type, created_at, updated_at;
+    ALTER TABLE "${tableName}"
+    ADD COLUMN IF NOT EXISTS "${columnName}" ${sqlType};
   `;
-  const r = await pool.query(q, [
-    field_order,
-    name,
-    label,
-    description ?? null,
-    type,
-  ]);
+  await pool.query(q);
+}
+
+export async function deleteField(field_uuid) {
+  const q = `
+    DELETE FROM sph_object_fields
+    WHERE field_uuid = $1
+    RETURNING field_uuid, field_id, object_uuid, object_id , name, label;
+  `;
+  const r = await pool.query(q, [field_uuid]);
   return r.rows[0] ?? null;
 }
 
-export async function listFieldsRows(tableName) {
+export async function dropColumnFromObject(tableName, columnName) {
   const q = `
-    SELECT field_uuid, field_id, field_order, name, label, description, type, created_at, updated_at
-    FROM "${tableName}"
-    ORDER BY field_order, field_id;
+  ALTER TABLE "${tableName}" DROP COLUMN IF EXISTS "${columnName}";
   `;
-  const r = await pool.query(q);
-  return r.rows;
+  await pool.query(q);
+  return { dropped: true };
 }

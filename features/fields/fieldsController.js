@@ -6,14 +6,13 @@ async function resolveObjectFromParams(params) {
   if (!paramVal) return null;
   try {
     return await objectsService.getObjectByUuid(paramVal);
-  } catch (err) {
-    if (/^\d+$/.test(String(paramVal))) {
-      try {
-        return await objectsService.getObjectById(paramVal);
-      } catch (e) {}
-    }
-    return null;
+  } catch (err) {}
+  if (/^\d+$/.test(String(paramVal))) {
+    try {
+      return await objectsService.getObjectById(paramVal);
+    } catch (err) {}
   }
+  return null;
 }
 
 export async function createField(req, res, next) {
@@ -22,11 +21,11 @@ export async function createField(req, res, next) {
     if (!object) return res.status(404).json({ message: "Object not found" });
 
     const {
-      field_order,
       field_name,
       field_label,
       field_description,
       field_type,
+      field_order,
     } = req.body;
     if (!field_name)
       return res.status(400).json({ message: "field_name required" });
@@ -36,11 +35,12 @@ export async function createField(req, res, next) {
       return res.status(400).json({ message: "field_type required" });
 
     const result = await fieldsService.addFieldToObject(object, {
-      field_order,
       field_name,
       field_label,
       field_description,
       field_type,
+      field_order,
+      created_by: req.user?.username ?? "system",
     });
 
     if (result.created === false) {
@@ -49,11 +49,7 @@ export async function createField(req, res, next) {
         .json({ message: result.message ?? "Field exists", result });
     }
 
-    return res.status(201).json({
-      tableCreated: result.tableCreated,
-      tableName: result.tableName,
-      field: result.field,
-    });
+    return res.status(201).json(result);
   } catch (err) {
     next(err);
   }
@@ -66,6 +62,59 @@ export async function getFields(req, res, next) {
 
     const rows = await fieldsService.listFieldsForObject(object);
     return res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateField(req, res, next) {
+  try {
+    const object = await resolveObjectFromParams(req.params);
+    if (!object) return res.status(400).json({ message: "Object not found" });
+
+    const fieldUuid = req.params.fieldUuid;
+    if (!fieldUuid)
+      return res.status(400).json({ message: "fieldUuid param required" });
+
+    const { name, label, description, field_type, field_order } = req.body;
+
+    if (!name && !label && !description && !field_type && !field_order) {
+      return res.status(400).json({ message: "No updatable fields provided" });
+    }
+
+    try {
+      const result = await fieldsService.updateField(
+        object,
+        fieldUuid,
+        { name, label, description, field_type, field_order },
+        req.user?.username ?? "system"
+      );
+      if (result.updated === false) {
+        return res
+          .status(200)
+          .json({ message: result.message ?? "Not updated", result });
+      }
+      return res.status(200).json(result);
+    } catch (err) {
+      return next(err);
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteField(req, res, next) {
+  try {
+    const object = await resolveObjectFromParams(req.params);
+    if (!object) return res.status(404).json({ message: "Object not found" });
+
+    const fieldUuid = req.params.fieldUuid;
+    if (!fieldUuid)
+      return res.status(404).json({ message: "fieldUuid not found" });
+
+    const result = await fieldsService.deleteFieldForObject(object, fieldUuid);
+
+    return res.status(204).end();
   } catch (err) {
     next(err);
   }
