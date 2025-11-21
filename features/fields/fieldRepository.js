@@ -33,6 +33,16 @@ export async function fieldNameExists(object_uuid, name) {
   return r.rowCount > 0;
 }
 
+export async function fieldNameExistsExcept(object_uuid, name, current_field_uuid) {
+  const q = `SELECT 1 FROM sph_object_fields 
+             WHERE object_uuid = $1 
+               AND LOWER(name) = LOWER($2) 
+               AND uuid != $3 
+             LIMIT 1;`;
+  const r = await pool.query(q, [object_uuid, name, current_field_uuid]);
+  return r.rowCount > 0;
+}
+
 
 export async function getNextOrderForObject(object_uuid) {
   const q = `SELECT COALESCE(MAX(field_order), 0) AS max_order FROM sph_object_fields WHERE object_uuid = $1;`;
@@ -94,6 +104,60 @@ export async function addColumnToObjectTable(tableName, columnName, sqlType) {
   `;
   await pool.query(q);
 }
+
+export async function renameColumnInObjectTable(tableName, oldColumn, newColumn) {
+  const checkQ = ` 
+  SELECT column_name
+  FROM  information_schema.columns
+  WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+  LIMIT 1
+  `;
+  const r = await pool.query(checkQ, [tableName, oldColumn]);
+  if (r.rowCount === 0) {
+    return { renamed: false, reason: "old_column_not_found" };
+  }
+
+  const q = `ALTER TABLE "${tableName}" RENAME COLUMN "${oldColumn}" TO "${newColumn}";`
+  await pool.query(q);
+  return { renamed: true };
+}
+
+export async function alterColumnTypeInObjectTable(tableName, columnName, sqlType) {
+  const checkQ = ` 
+  SELECT column_name
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+  LIMIT 1
+  `;
+  const r = await pool.query(checkQ, [tableName, columnName])
+  if (r.rowCount === 0) {
+    return { altered: false, reason: "column_not_found" };
+  }
+
+  const q = `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" TYPE ${sqlType} USING "${columnName}"::${sqlType};`
+  await pool.query(q);
+  return { altered: true };
+
+}
+
+export async function updateFieldMetadata(field_uuid, { name, label, description, field_type, field_order, last_updated_by = "system" }) {
+  const q = `
+  UPDATE sph_object_fields
+  SET
+  name = COALESCE($2,name),
+  label = COALESCE($3, label),
+  description = COALESCE($4, description),
+  field_type = COALESCE($5, field_type),
+  field_order = COALESCE($6, field_order),
+  last_updated_by = $7,
+  last_updated_at = NOW()
+  WHERE field_uuid = $1
+  RETURNING field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at;
+  `;
+  const r = await pool.query(q, [field_uuid, name, label, description, field_type, field_order, last_updated_by]);
+  return r.rows[0] ?? null;
+}
+
 
 export async function deleteField(field_uuid) {
   const q = `
