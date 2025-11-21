@@ -6,11 +6,11 @@ async function resolveObjectFromParams(params) {
   if (!paramVal) return null;
   try {
     return await objectsService.getObjectByUuid(paramVal);
-  } catch (err) {}
+  } catch (err) { }
   if (/^\d+$/.test(String(paramVal))) {
     try {
       return await objectsService.getObjectById(paramVal);
-    } catch (err) {}
+    } catch (err) { }
   }
   return null;
 }
@@ -83,7 +83,7 @@ export async function updateField(req, res, next) {
     }
 
     try {
-      const result = await fieldsService.updateField(
+      const result = await fieldsService.updateFieldForObject(
         object,
         fieldUuid,
         { name, label, description, field_type, field_order },
