@@ -7,7 +7,7 @@ function sanitizeObjectName(name) {
 
 export async function getAllObjects() {
   const q = `
-    SELECT object_uuid, object_id, name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by, is_deleted
+    SELECT object_uuid, object_id, name, description, database_object, created_at, created_by, last_updated_at, last_updated_by, is_deleted
     FROM objects
     ORDER BY created_at DESC
   `;
@@ -17,7 +17,7 @@ export async function getAllObjects() {
 
 export async function getObjectByUuid(object_uuid) {
   const q = `
-    SELECT object_uuid, object_id, name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by,is_deleted
+    SELECT object_uuid, object_id, name, description, database_object, created_at, created_by, last_updated_at, last_updated_by,is_deleted
     FROM objects
     WHERE object_uuid = $1
     LIMIT 1
@@ -28,7 +28,7 @@ export async function getObjectByUuid(object_uuid) {
 
 export async function getObjectById(object_id) {
   const q = `
-    SELECT object_uuid, object_id, name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by, is_deleted
+    SELECT object_uuid, object_id, name, description, database_object, created_at, created_by, last_updated_at, last_updated_by, is_deleted
     FROM objects
     WHERE object_id = $1
     LIMIT 1
@@ -39,7 +39,7 @@ export async function getObjectById(object_id) {
 
 export async function getObjectByName(name) {
   const q = `
-    SELECT object_uuid, object_id, name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by, is_deleted
+    SELECT object_uuid, object_id, name, description, database_object, created_at, created_by, last_updated_at, last_updated_by, is_deleted
     FROM objects
     WHERE LOWER(name) = LOWER($1)
     LIMIT 1
@@ -52,9 +52,9 @@ export async function createObject({ name, description = null }) {
   const cleanName = sanitizeObjectName(name);
   const dbObjectName = `sph_object_${cleanName}`;
   const q = `
-    INSERT INTO objects (name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by)
+    INSERT INTO objects (name, description, database_object, created_at, created_by, last_updated_at, last_updated_by)
     VALUES ($1, $2, $3, NOW(), 'admin', NOW(), 'admin')
-    RETURNING object_uuid, object_id, name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by
+    RETURNING object_uuid, object_id, name, description, database_object, created_at, created_by, last_updated_at, last_updated_by
   `;
   const r = await pool.query(q, [name, description, dbObjectName]);
   return r.rows[0] ?? null;
@@ -71,10 +71,10 @@ export async function updateObject(object_uuid, { name, description }) {
     SET
       name = COALESCE($2, name),
       description = COALESCE($3, description),
-      databse_object = COALESCE($4, databse_object),
+      database_object = COALESCE($4, database_object),
       last_updated_at = NOW()
     WHERE object_uuid = $1
-    RETURNING object_uuid, object_id, name, description, databse_object, created_at, created_by, last_updated_at, last_updated_by
+    RETURNING object_uuid, object_id, name, description, database_object, created_at, created_by, last_updated_at, last_updated_by
   `;
   const r = await pool.query(q, [
     object_uuid,

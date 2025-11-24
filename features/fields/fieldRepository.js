@@ -145,7 +145,7 @@ export async function deleteField(field_uuid) {
   const q = `
     DELETE FROM sph_object_fields
     WHERE field_uuid = $1
-    RETURNING field_uuid, field_id, object_uuid, object_id , name, label;
+    RETURNING field_uuid, field_id, object_uuid , name, label;
   `;
   const r = await pool.query(q, [field_uuid]);
   return r.rows[0] ?? null;
