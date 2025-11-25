@@ -6,11 +6,11 @@ async function resolveObjectFromParams(params) {
   if (!paramVal) return null;
   try {
     return await objectsService.getObjectByUuid(paramVal);
-  } catch (err) { }
+  } catch (err) {}
   if (/^\d+$/.test(String(paramVal))) {
     try {
       return await objectsService.getObjectById(paramVal);
-    } catch (err) { }
+    } catch (err) {}
   }
   return null;
 }
@@ -19,6 +19,11 @@ export async function createField(req, res, next) {
   try {
     const object = await resolveObjectFromParams(req.params);
     if (!object) return res.status(404).json({ message: "Object not found" });
+
+    const tableName = object?.database_object;
+    if (!tableName) {
+      return res.status(400).json({ message: object });
+    }
 
     const {
       field_name,
@@ -34,7 +39,7 @@ export async function createField(req, res, next) {
     if (!field_type)
       return res.status(400).json({ message: "field_type required" });
 
-    const result = await fieldsService.addFieldToObject(object, {
+    const result = await fieldsService.addFieldToObject(object, tableName, {
       field_name,
       field_label,
       field_description,
@@ -72,6 +77,10 @@ export async function updateField(req, res, next) {
     const object = await resolveObjectFromParams(req.params);
     if (!object) return res.status(400).json({ message: "Object not found" });
 
+    const tableName = object?.database_object;
+    if (!tableName) {
+      return res.status(400).json({ message: object });
+    }
     const fieldUuid = req.params.fieldUuid;
     if (!fieldUuid)
       return res.status(400).json({ message: "fieldUuid param required" });
@@ -85,6 +94,7 @@ export async function updateField(req, res, next) {
     try {
       const result = await fieldsService.updateFieldForObject(
         object,
+        tableName,
         fieldUuid,
         { name, label, description, field_type, field_order },
         req.user?.username ?? "system"
@@ -108,11 +118,19 @@ export async function deleteField(req, res, next) {
     const object = await resolveObjectFromParams(req.params);
     if (!object) return res.status(404).json({ message: "Object not found" });
 
+    const tableName = object?.database_object;
+    if (!tableName) {
+      return res.status(400).json({ message: object });
+    }
     const fieldUuid = req.params.fieldUuid;
     if (!fieldUuid)
       return res.status(404).json({ message: "fieldUuid not found" });
 
-    const result = await fieldsService.deleteFieldForObject(object, fieldUuid);
+    const result = await fieldsService.deleteFieldForObject(
+      object,
+      tableName,
+      fieldUuid
+    );
 
     return res.status(204).end();
   } catch (err) {
