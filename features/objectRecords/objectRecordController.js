@@ -66,6 +66,41 @@ export async function createRecord(req, res, next) {
   }
 }
 
+export async function updateRecord(req, res, next) {
+  try {
+    const object = await resolveObject(req.params);
+    if (!object) return res.status(400).json({ message: "Object not found" });
+
+    const tableName = object?.database_object;
+    if (!tableName)
+      return res.status(400).json({ message: "Object database name missing" });
+
+    const recordUuid = req.params.recordUuid;
+    if (!recordUuid)
+      return res.status(400).json({ message: "recordUuid required" });
+
+    const payload = req.body ?? {};
+    if (!payload || typeof payload !== "object")
+      return res.status(400).json({ message: "Invalid payload" });
+
+    try {
+      const updated = await recordsService.updateRecordForObject(
+        object,
+        tableName,
+        recordUuid,
+        payload
+      );
+      return res.status(201).json(updated);
+    } catch (error) {
+      return res
+        .status(404)
+        .json({ message: error.message ?? "Failed to update record" });
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function deleteRecord(req, res, next) {
   try {
     const object = await resolveObject(req.params);

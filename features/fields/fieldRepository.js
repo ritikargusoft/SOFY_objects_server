@@ -1,13 +1,29 @@
 import pool from "../../db/connectDB.js";
 
-export async function insertFieldMetadata({ object_uuid, name, label, description = null, field_type, field_order = 1, created_by = "system" }) {
+export async function insertFieldMetadata({
+  object_uuid,
+  name,
+  label,
+  description = null,
+  field_type,
+  field_order = 1,
+  created_by = "system",
+}) {
   const q = `
     INSERT INTO sph_object_fields
       (object_uuid, name, label, description, field_type, field_order, created_by, created_at, last_updated_by, last_updated_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $7, NOW())
     RETURNING field_uuid, field_id, object_uuid, name, label, description, field_type, field_order, created_by, created_at;
   `;
-  const r = await pool.query(q, [object_uuid, name, label, description, field_type, field_order, created_by]);
+  const r = await pool.query(q, [
+    object_uuid,
+    name,
+    label,
+    description,
+    field_type,
+    field_order,
+    created_by,
+  ]);
   return r.rows[0] ?? null;
 }
 
@@ -17,7 +33,11 @@ export async function fieldNameExists(object_uuid, name) {
   return r.rowCount > 0;
 }
 
-export async function fieldNameExistsExcept(object_uuid, name, except_field_uuid) {
+export async function fieldNameExistsExcept(
+  object_uuid,
+  name,
+  except_field_uuid
+) {
   const q = `
     SELECT 1 FROM sph_object_fields
     WHERE object_uuid = $1 AND LOWER(name) = LOWER($2) AND field_uuid <> $3
@@ -26,7 +46,6 @@ export async function fieldNameExistsExcept(object_uuid, name, except_field_uuid
   const r = await pool.query(q, [object_uuid, name, except_field_uuid]);
   return r.rowCount > 0;
 }
-
 
 export async function getNextOrderForObject(object_uuid) {
   const q = `SELECT COALESCE(MAX(field_order), 0) AS max_order FROM sph_object_fields WHERE object_uuid = $1;`;
@@ -89,7 +108,11 @@ export async function addColumnToObjectTable(tableName, columnName, sqlType) {
   await pool.query(q);
 }
 
-export async function renameColumnInObjectTable(tableName, oldColumn, newColumn) {
+export async function renameColumnInObjectTable(
+  tableName,
+  oldColumn,
+  newColumn
+) {
   const checkQ = `
     SELECT column_name
     FROM information_schema.columns
@@ -98,16 +121,18 @@ export async function renameColumnInObjectTable(tableName, oldColumn, newColumn)
   `;
   const r = await pool.query(checkQ, [tableName, oldColumn]);
   if (r.rowCount === 0) {
-    // nothing to rename
     return { renamed: false, reason: "old_column_not_found" };
   }
-  // perform rename
   const q = `ALTER TABLE "${tableName}" RENAME COLUMN "${oldColumn}" TO "${newColumn}";`;
   await pool.query(q);
   return { renamed: true };
 }
 
-export async function alterColumnTypeInObjectTable(tableName, columnName, sqlType) {
+export async function alterColumnTypeInObjectTable(
+  tableName,
+  columnName,
+  sqlType
+) {
   const checkQ = `
     SELECT column_name
     FROM information_schema.columns
@@ -123,7 +148,17 @@ export async function alterColumnTypeInObjectTable(tableName, columnName, sqlTyp
   return { altered: true };
 }
 
-export async function updateFieldMetadata(field_uuid, { name, label, description, field_type, field_order, last_updated_by = "system" }) {
+export async function updateFieldMetadata(
+  field_uuid,
+  {
+    name,
+    label,
+    description,
+    field_type,
+    field_order,
+    last_updated_by = "system",
+  }
+) {
   const q = `
     UPDATE sph_object_fields
     SET
@@ -137,7 +172,15 @@ export async function updateFieldMetadata(field_uuid, { name, label, description
     WHERE field_uuid = $1
     RETURNING field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at;
   `;
-  const r = await pool.query(q, [field_uuid, name ?? null, label ?? null, description ?? null, field_type ?? null, field_order ?? null, last_updated_by]);
+  const r = await pool.query(q, [
+    field_uuid,
+    name ?? null,
+    label ?? null,
+    description ?? null,
+    field_type ?? null,
+    field_order ?? null,
+    last_updated_by,
+  ]);
   return r.rows[0] ?? null;
 }
 
