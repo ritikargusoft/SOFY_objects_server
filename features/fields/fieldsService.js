@@ -1,16 +1,16 @@
 import * as repo from "./fieldRepository.js";
 
-export function sanitizeIdentifier(raw) {
-  if (!raw || typeof raw !== "string") throw new Error("Invalid identifier");
-  let s = raw.trim().toLowerCase();
-  s = s.replace(/[^a-z0-9_]+/g, "_");
-  s = s.replace(/^[^a-z_]+/, "");
-  if (!s) throw new Error("Invalid identifier after sanitization");
-  if (s.length > 60) s = s.slice(0, 60);
-  if (!/^[a-z_][a-z0-9_]*$/.test(s))
-    throw new Error("Identifier contains invalid characters");
-  return s;
-}
+// export function sanitizeIdentifier(raw) {
+//   if (!raw || typeof raw !== "string") throw new Error("Invalid identifier");
+//   let s = raw.trim().toLowerCase();
+//   s = s.replace(/[^a-z0-9_]+/g, "_");
+//   s = s.replace(/^[^a-z_]+/, "");
+//   if (!s) throw new Error("Invalid identifier after sanitization");
+//   if (s.length > 60) s = s.slice(0, 60);
+//   if (!/^[a-z_][a-z0-9_]*$/.test(s))
+//     throw new Error("Identifier contains invalid characters");
+//   return s;
+// }
 
 function mapFieldTypeToSql(fieldType) {
   switch (fieldType) {
@@ -80,7 +80,7 @@ export async function addFieldToObject(
     created_by,
   });
 
-  const columnName = sanitizeIdentifier(field_name);
+  const columnName = field_name;
   const sqlType = mapFieldTypeToSql(field_type);
   const tableExists = await repo.tableExists(tableName);
   if (!tableExists) {
@@ -137,8 +137,8 @@ export async function updateFieldForObject(
     addedColumnIfMissing: false,
   };
   const tableExists = await repo.tableExists(tableName);
-  const oldColumn = sanitizeIdentifier(current.name);
-  const newColumn = updates.name ? sanitizeIdentifier(updates.name) : oldColumn;
+  const oldColumn = current.name;
+  const newColumn = updates.name ? updates.name : oldColumn;
 
   if (updates.name && tableExists) {
     if (oldColumn !== newColumn) {
@@ -179,7 +179,7 @@ export async function updateFieldForObject(
 
   if (!tableExists && (updates.name || updates.field_type)) {
     await repo.createObjectDataTable(tableName);
-    const col = sanitizeIdentifier(updates.name ?? current.name);
+    const col = updates.name ?? current.name;
     const sqlType = mapFieldTypeToSql(updates.field_type ?? current.field_type);
     await repo.addColumnToObjectTable(tableName, col, sqlType);
     ddlResults.addedColumnIfMissing = true;
@@ -210,7 +210,7 @@ export async function deleteFieldForObject(object, tableName, field_uuid) {
     throw new Error("Field does not belong to the provided object");
   }
 
-  const columnName = sanitizeIdentifier(current.name);
+  const columnName = current.name;
 
   const tableExists = await repo.tableExists(tableName);
   let dropped = false;
