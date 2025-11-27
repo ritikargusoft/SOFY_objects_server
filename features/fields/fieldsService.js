@@ -1,17 +1,5 @@
 import * as repo from "./fieldRepository.js";
 
-// export function sanitizeIdentifier(raw) {
-//   if (!raw || typeof raw !== "string") throw new Error("Invalid identifier");
-//   let s = raw.trim().toLowerCase();
-//   s = s.replace(/[^a-z0-9_]+/g, "_");
-//   s = s.replace(/^[^a-z_]+/, "");
-//   if (!s) throw new Error("Invalid identifier after sanitization");
-//   if (s.length > 60) s = s.slice(0, 60);
-//   if (!/^[a-z_][a-z0-9_]*$/.test(s))
-//     throw new Error("Identifier contains invalid characters");
-//   return s;
-// }
-
 function mapFieldTypeToSql(fieldType) {
   switch (fieldType) {
     case "short_text":
@@ -111,9 +99,9 @@ export async function updateFieldForObject(
   if (!field_uuid) throw new Error("field_uuid required");
   const current = await repo.getFieldByUuid(field_uuid);
   if (!current) throw new Error("Field not found");
-  if (current.object_uuid !== object.object_uuid) {
-    throw new Error("Field does not belong to the provided object");
-  }
+  // if (current.object_uuid !== object.object_uuid) {
+  //   throw new Error("Field does not belong to the provided object");
+  // }
   if (updates.name && updates.name !== current.name) {
     const nameExists = await repo.fieldNameExistsExcept(
       object.object_uuid,

@@ -46,8 +46,16 @@ export async function createObject(req, res, next) {
 
 export async function updateObject(req, res, next) {
   try {
-    const object = await objectsService.updateObject(req.params.id, req.body);
-    return res.json({ message: "Object updated", object });
+    const result = await objectsService.updateObject(req.params.id, req.body);
+
+    if (result.updated === false) {
+      return res.status(200).json({
+        message: result.message ?? "Not updated",
+        result,
+      });
+    }
+
+    return res.status(200).json(result);
   } catch (err) {
     next(err);
   }

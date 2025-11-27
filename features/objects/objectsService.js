@@ -16,7 +16,7 @@ export async function getObjectById(id) {
 export async function getObjectByName(name) {
   if (!name) throw new AppError("Missing name", 400);
   const object = await objectRepository.getObjectByName(name);
-    return object;
+  return object;
 }
 
 export async function getAllObjects() {
@@ -25,7 +25,8 @@ export async function getAllObjects() {
 }
 
 export async function createObject(data) {
-  if (!data || !data.name) throw new AppError("Enter the name of an object", 400);
+  if (!data || !data.name)
+    throw new AppError("Enter the name of an object", 400);
 
   const name = data.name;
   const description = data.description ?? null;
@@ -43,12 +44,37 @@ export async function createObject(data) {
   return { created: true, object };
 }
 
+// 🔹 UPDATED: smarter update with duplicate-name check & `updated` flag
 export async function updateObject(object_uuid, data) {
   if (!object_uuid) throw new AppError("Missing object identifier", 400);
   if (!data) throw new AppError("Missing update payload", 400);
 
+  const current = await objectRepository.getObjectByUuid(object_uuid);
+  if (!current) throw new AppError("Object not found", 404);
+
   const name = data.name ?? null;
   const description = data.description ?? null;
+
+  if (!name && description === null) {
+    return {
+      updated: false,
+      message: "No updatable fields provided",
+      object: current,
+    };
+  }
+
+  if (name && name !== current.name) {
+    const exists = await objectRepository.objectNameExistsExcept(
+      name,
+      object_uuid
+    );
+    if (exists) {
+      return {
+        updated: false,
+        message: "Object name already exists",
+      };
+    }
+  }
 
   const object = await objectRepository.updateObject(object_uuid, {
     name,
@@ -56,7 +82,11 @@ export async function updateObject(object_uuid, data) {
   });
 
   if (!object) throw new AppError("Object not found", 404);
-  return object;
+
+  return {
+    updated: true,
+    object,
+  };
 }
 
 export async function deleteObject(object_uuid) {

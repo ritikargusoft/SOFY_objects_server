@@ -48,6 +48,18 @@ export async function getObjectByName(name) {
   return r.rows[0] ?? null;
 }
 
+export async function objectNameExistsExcept(name, exceptObjectUuid) {
+  const q = `
+    SELECT 1
+    FROM objects
+    WHERE LOWER(name) = LOWER($1)
+      AND object_uuid <> $2
+    LIMIT 1
+  `;
+  const r = await pool.query(q, [name, exceptObjectUuid]);
+  return r.rowCount > 0;
+}
+
 export async function createObject({ name, description = null }) {
   const cleanName = sanitizeObjectName(name);
   const dbObjectName = `sph_object_${cleanName}`;
