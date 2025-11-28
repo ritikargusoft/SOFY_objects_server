@@ -1,23 +1,37 @@
 import * as repo from "./fieldRepository.js";
 
-function mapFieldTypeToSql(fieldType) {
+const VARCHAR_MAX_LIMIT = 10000000;
+
+function mapFieldTypeToSql(fieldType, maxLength = null) {
   switch (fieldType) {
     case "short_text":
-      return "VARCHAR(255)";
+      const ml = Number(maxLength) || 255;
+      return `VARCHAR(${ml})`;
+
     case "long_text":
-      return "TEXT";
+      return "VARCHAR(255)";
+
     case "number":
       return "NUMERIC";
-    case "checkbox":
-      return "BOOLEAN";
-    case "dropdown":
-      return "VARCHAR(255)";
-    case "radio":
-      return "VARCHAR(255)";
+
     case "email":
       return "VARCHAR(255)";
+
+    case "dropdown":
+      return "TEXT";
+
+    case "checkbox":
+      return "TEXT";
+
+    case "radio":
+      return "VARCHAR(255)";
+
+    case "decimal":
+      return "NUMERIC(38,3)";
+
     case "star_rating":
       return "INTEGER";
+
     default:
       throw new Error("Unsupported field type");
   }
@@ -31,6 +45,7 @@ const ALLOWED = [
   "radio",
   "email",
   "star_rating",
+  "decimal",
 ];
 
 export async function addFieldToObject(
@@ -43,12 +58,27 @@ export async function addFieldToObject(
     field_type,
     field_order = null,
     created_by = "system",
+    max_length = null,
+    default_value = null,
   }
 ) {
   if (!field_name) throw new Error("field_name required");
   if (!field_label) throw new Error("field_label required");
   if (!field_type) throw new Error("field_type required");
   if (!ALLOWED.includes(field_type)) throw new Error("Invalid field_type");
+
+  //validation for short text and max_length
+  if (field_type === "short_text" && max_length != null) {
+    const ml = Number(max_length);
+    if (Number.isNaN(ml) || ml <= 0) {
+      throw new Error("Invalid max_length");
+    }
+    if (ml > VARCHAR_MAX_LIMIT) {
+      throw new Error(
+        `Max Length should not be greater than NVARCHAR(MAX) (i.e. ${VARCHAR_MAX_LIMIT})`
+      );
+    }
+  }
 
   const exists = await repo.fieldNameExists(object.object_uuid, field_name);
   if (exists) {
@@ -66,10 +96,17 @@ export async function addFieldToObject(
     field_type,
     field_order: order,
     created_by,
+    max_length:
+      field_type === "short_text"
+        ? max_length
+          ? Number(max_length)
+          : 255
+        : null,
+    default_value: default_value ?? null,
   });
 
   const columnName = field_name;
-  const sqlType = mapFieldTypeToSql(field_type);
+  const sqlType = mapFieldTypeToSql(field_type, meta.max_length ?? null);
   const tableExists = await repo.tableExists(tableName);
   if (!tableExists) {
     await repo.createObjectDataTable(tableName);
@@ -99,9 +136,7 @@ export async function updateFieldForObject(
   if (!field_uuid) throw new Error("field_uuid required");
   const current = await repo.getFieldByUuid(field_uuid);
   if (!current) throw new Error("Field not found");
-  // if (current.object_uuid !== object.object_uuid) {
-  //   throw new Error("Field does not belong to the provided object");
-  // }
+
   if (updates.name && updates.name !== current.name) {
     const nameExists = await repo.fieldNameExistsExcept(
       object.object_uuid,
@@ -119,15 +154,37 @@ export async function updateFieldForObject(
   if (updates.field_type && !ALLOWED.includes(updates.field_type)) {
     throw new Error("Invalid field_type");
   }
+
+  // validate max_length when provided for short_text
+  if (
+    updates.field_type === "short_text" ||
+    current.field_type === "short_text"
+  ) {
+    const newType = updates.field_type ?? current.field_type;
+    const newMax = updates.max_length ?? current.max_length;
+    if (newType === "short_text" && newMax != null) {
+      const ml = Number(newMax);
+      if (Number.isNaN(ml) || ml <= 0) throw new Error("Invalid max_length");
+      if (ml > VARCHAR_MAX_LIMIT) {
+        throw new Error(
+          `Max Length should not be greater than NVARCHAR(MAX) (i.e. ${VARCHAR_MAX_LIMIT})`
+        );
+      }
+    }
+  }
+
   const ddlResults = {
     renamedColumn: false,
     alteredType: false,
     addedColumnIfMissing: false,
+    defaultChanged: false,
   };
+
   const tableExists = await repo.tableExists(tableName);
   const oldColumn = current.name;
   const newColumn = updates.name ? updates.name : oldColumn;
 
+  //handle rename / add column if missing
   if (updates.name && tableExists) {
     if (oldColumn !== newColumn) {
       try {
@@ -139,7 +196,8 @@ export async function updateFieldForObject(
         if (renameRes.renamed) ddlResults.renamedColumn = true;
         else if (renameRes.reason === "old_column_not_found") {
           const sqlType = mapFieldTypeToSql(
-            updates.field_type ?? current.field_type
+            updates.field_type ?? current.field_type,
+            updates.max_length ?? current.max_length
           );
           await repo.addColumnToObjectTable(tableName, newColumn, sqlType);
           ddlResults.addedColumnIfMissing = true;
@@ -150,9 +208,13 @@ export async function updateFieldForObject(
     }
   }
 
+  // handle type change (including max length)
   if (updates.field_type && tableExists) {
     const targetColumn = newColumn;
-    const sqlType = mapFieldTypeToSql(updates.field_type);
+    const sqlType = mapFieldTypeToSql(
+      updates.field_type,
+      updates.max_length ?? current.max_length
+    );
     try {
       const alterRes = await repo.alterColumnTypeInObjectTable(
         tableName,
@@ -165,14 +227,19 @@ export async function updateFieldForObject(
     }
   }
 
+  // if table doesn't exist yet and name/type provided create table and add column
   if (!tableExists && (updates.name || updates.field_type)) {
     await repo.createObjectDataTable(tableName);
     const col = updates.name ?? current.name;
-    const sqlType = mapFieldTypeToSql(updates.field_type ?? current.field_type);
+    const sqlType = mapFieldTypeToSql(
+      updates.field_type ?? current.field_type,
+      updates.max_length ?? current.max_length
+    );
     await repo.addColumnToObjectTable(tableName, col, sqlType);
     ddlResults.addedColumnIfMissing = true;
   }
 
+  // update metadata
   const updated = await repo.updateFieldMetadata(field_uuid, {
     name: updates.name ?? null,
     label: updates.label ?? null,
@@ -180,7 +247,14 @@ export async function updateFieldForObject(
     field_type: updates.field_type ?? null,
     field_order: updates.field_order ?? null,
     last_updated_by: updated_by,
+    max_length:
+      typeof updates.max_length !== "undefined" ? updates.max_length : null,
+    default_value:
+      typeof updates.default_value !== "undefined"
+        ? updates.default_value
+        : null,
   });
+
   return {
     updated: true,
     metadata: updated,
@@ -199,7 +273,6 @@ export async function deleteFieldForObject(object, tableName, field_uuid) {
   }
 
   const columnName = current.name;
-
   const tableExists = await repo.tableExists(tableName);
   let dropped = false;
 

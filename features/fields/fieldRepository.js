@@ -8,11 +8,13 @@ export async function insertFieldMetadata({
   field_type,
   field_order = 1,
   created_by = "system",
+  max_length = null,
+  default_value = null,
 }) {
   const q = `
     INSERT INTO sph_object_fields
-      (object_uuid, name, label, description, field_type, field_order, created_by, created_at, last_updated_by, last_updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $7, NOW())
+      (object_uuid, name, label, description, field_type, field_order, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $7, NOW(), $8, $9)
     RETURNING field_uuid, field_id, object_uuid, name, label, description, field_type, field_order, created_by, created_at;
   `;
   const r = await pool.query(q, [
@@ -23,6 +25,8 @@ export async function insertFieldMetadata({
     field_type,
     field_order,
     created_by,
+    max_length,
+    default_value,
   ]);
   return r.rows[0] ?? null;
 }
@@ -55,7 +59,7 @@ export async function getNextOrderForObject(object_uuid) {
 
 export async function getFieldsByObject(object_uuid) {
   const q = `
-    SELECT field_uuid, field_id, field_order, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at
+    SELECT field_uuid, field_id, field_order, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value
     FROM sph_object_fields
     WHERE object_uuid = $1
     ORDER BY field_order, field_id;
@@ -66,7 +70,7 @@ export async function getFieldsByObject(object_uuid) {
 
 export async function getFieldByUuid(field_uuid) {
   const q = `
-    SELECT field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at
+    SELECT field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value
     FROM sph_object_fields
     WHERE field_uuid = $1
     LIMIT 1;
@@ -157,6 +161,8 @@ export async function updateFieldMetadata(
     field_type,
     field_order,
     last_updated_by = "system",
+    max_length = null,
+    default_value = null,
   }
 ) {
   const q = `
@@ -168,9 +174,11 @@ export async function updateFieldMetadata(
       field_type = COALESCE($5, field_type),
       field_order = COALESCE($6, field_order),
       last_updated_by = $7,
-      last_updated_at = NOW()
+      last_updated_at = NOW(),
+      max_length = COALESCE($8, max_length),
+      default_value = COALESCE($9, default_value)
     WHERE field_uuid = $1
-    RETURNING field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at;
+    RETURNING field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value;
   `;
   const r = await pool.query(q, [
     field_uuid,
@@ -180,6 +188,8 @@ export async function updateFieldMetadata(
     field_type ?? null,
     field_order ?? null,
     last_updated_by,
+    max_length ?? null,
+    default_value ?? null,
   ]);
   return r.rows[0] ?? null;
 }
@@ -188,7 +198,7 @@ export async function deleteField(field_uuid) {
   const q = `
     DELETE FROM sph_object_fields
     WHERE field_uuid = $1
-    RETURNING field_uuid, field_id, object_uuid , name, label;
+    RETURNING field_uuid, field_id, object_uuid , name, label, max_length, default_value;
   `;
   const r = await pool.query(q, [field_uuid]);
   return r.rows[0] ?? null;

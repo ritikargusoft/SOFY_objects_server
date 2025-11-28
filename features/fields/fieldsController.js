@@ -31,6 +31,8 @@ export async function createField(req, res, next) {
       field_description,
       field_type,
       field_order,
+      max_length,
+      default_value,
     } = req.body;
     if (!field_name)
       return res.status(400).json({ message: "field_name required" });
@@ -46,6 +48,8 @@ export async function createField(req, res, next) {
       field_type,
       field_order,
       created_by: req.user?.username ?? "system",
+      max_length,
+      default_value,
     });
 
     if (result.created === false) {
@@ -85,9 +89,25 @@ export async function updateField(req, res, next) {
     if (!fieldUuid)
       return res.status(400).json({ message: "fieldUuid param required" });
 
-    const { name, label, description, field_type, field_order } = req.body;
+    const {
+      name,
+      label,
+      description,
+      field_type,
+      field_order,
+      max_length,
+      default_value,
+    } = req.body;
 
-    if (!name && !label && !description && !field_type && !field_order) {
+    if (
+      !name &&
+      !label &&
+      !description &&
+      !field_type &&
+      !field_order &&
+      typeof max_length === "undefined" &&
+      typeof default_value === "undefined"
+    ) {
       return res.status(400).json({ message: "No updatable fields provided" });
     }
 
@@ -96,7 +116,15 @@ export async function updateField(req, res, next) {
         object,
         tableName,
         fieldUuid,
-        { name, label, description, field_type, field_order },
+        {
+          name,
+          label,
+          description,
+          field_type,
+          field_order,
+          max_length,
+          default_value,
+        },
         req.user?.username ?? "system"
       );
       if (result.updated === false) {

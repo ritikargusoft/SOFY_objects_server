@@ -34,8 +34,24 @@ export async function createRecordForObject(object, tableName, payload = {}) {
     }
   }
 
+  const fieldsMeta = await fieldsService.listFieldsForObject(object);
+  for (const f of fieldsMeta) {
+    const col = f.name;
+    if (!col) continue;
+    if (protectedCols.has(col)) continue;
+    if (!cols.includes(col)) continue;
+
+    if (
+      typeof payloadFiltered[col] === "undefined" &&
+      f.default_value != null
+    ) {
+      payloadFiltered[col] = f.default_value;
+    }
+  }
+
   if (Object.keys(payloadFiltered).length === 0) {
-    throw new Error("No valid fields provided in the payload");
+    const inserted = await repo.insertRecord(tableName, {});
+    return inserted;
   }
 
   const inserted = await repo.insertRecord(tableName, payloadFiltered);
