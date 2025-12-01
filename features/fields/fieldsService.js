@@ -67,6 +67,8 @@ const ALLOWED = [
   "decimal",
 ];
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function addFieldToObject(
   object,
   tableName,
@@ -127,7 +129,17 @@ export async function addFieldToObject(
     if (typeof decimal_places !== "undefined" && decimal_places !== null) {
       const dp = Number(decimal_places);
       if (Number.isNaN(dp) || !Number.isInteger(dp) || dp < 0 || dp > 10) {
-        throw new Error("Enter a value between 1 and 10");
+        throw new Error("decimal_places must be an integer between 0 and 10");
+      }
+    }
+  }
+
+  // validation for email
+  if (field_type === "email") {
+    if (typeof default_value !== "undefined" && default_value !== null) {
+      const dv = String(default_value).trim();
+      if (dv !== "" && !EMAIL_REGEX.test(dv)) {
+        throw new Error("default_value must be a valid email address");
       }
     }
   }
@@ -289,6 +301,22 @@ export async function updateFieldForObject(
     }
   }
 
+  const willBeEmail =
+    (typeof updates.field_type !== "undefined"
+      ? updates.field_type
+      : current.field_type) === "email";
+
+  if (willBeEmail) {
+    if (typeof updates.default_value !== "undefined") {
+      const dv = updates.default_value;
+      const dvStr =
+        dv === null || typeof dv === "undefined" ? "" : String(dv).trim();
+      if (dvStr !== "" && !EMAIL_REGEX.test(dvStr)) {
+        throw new Error("default_value must be a valid email address");
+      }
+    }
+  }
+
   const ddlResults = {
     renamedColumn: false,
     alteredType: false,
@@ -317,7 +345,6 @@ export async function updateFieldForObject(
             typeof updates.allow_decimal !== "undefined"
               ? updates.allow_decimal
               : current.allow_decimal,
-
             typeof updates.decimal_places !== "undefined"
               ? updates.decimal_places
               : current.decimal_places
@@ -331,7 +358,7 @@ export async function updateFieldForObject(
     }
   }
 
-  // handle type change (including max length, number, decimal )
+  // handle type change
   if (updates.field_type && tableExists) {
     const targetColumn = newColumn;
     const sqlType = mapFieldTypeToSql(
