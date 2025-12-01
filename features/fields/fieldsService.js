@@ -1,15 +1,22 @@
 import * as repo from "./fieldRepository.js";
 
-const VARCHAR_MAX_LIMIT = 10000000;
+const VARCHAR_MAX_LIMIT = 1000000000; // match frontend limit
 
 function mapFieldTypeToSql(fieldType, maxLength = null) {
   switch (fieldType) {
-    case "short_text":
+    case "short_text": {
       const ml = Number(maxLength) || 255;
       return `VARCHAR(${ml})`;
+    }
 
-    case "long_text":
-      return "VARCHAR(255)";
+    case "long_text": {
+      // if maxLength provided, use VARCHAR(maxLength), otherwise TEXT
+      const ml = Number(maxLength);
+      if (!Number.isNaN(ml) && ml > 0) {
+        return `VARCHAR(${ml})`;
+      }
+      return `TEXT`;
+    }
 
     case "number":
       return "NUMERIC";
@@ -36,6 +43,7 @@ function mapFieldTypeToSql(fieldType, maxLength = null) {
       throw new Error("Unsupported field type");
   }
 }
+
 const ALLOWED = [
   "short_text",
   "long_text",
@@ -60,6 +68,7 @@ export async function addFieldToObject(
     created_by = "system",
     max_length = null,
     default_value = null,
+    markdown = false,
   }
 ) {
   if (!field_name) throw new Error("field_name required");
@@ -67,8 +76,11 @@ export async function addFieldToObject(
   if (!field_type) throw new Error("field_type required");
   if (!ALLOWED.includes(field_type)) throw new Error("Invalid field_type");
 
-  //validation for short text and max_length
-  if (field_type === "short_text" && max_length != null) {
+  // validation for short_text and long_text max_length
+  if (
+    (field_type === "short_text" || field_type === "long_text") &&
+    max_length != null
+  ) {
     const ml = Number(max_length);
     if (Number.isNaN(ml) || ml <= 0) {
       throw new Error("Invalid max_length");
@@ -97,12 +109,15 @@ export async function addFieldToObject(
     field_order: order,
     created_by,
     max_length:
-      field_type === "short_text"
+      field_type === "short_text" || field_type === "long_text"
         ? max_length
           ? Number(max_length)
-          : 255
+          : field_type === "short_text"
+          ? 255
+          : null
         : null,
     default_value: default_value ?? null,
+    markdown: !!markdown,
   });
 
   const columnName = field_name;
@@ -155,14 +170,22 @@ export async function updateFieldForObject(
     throw new Error("Invalid field_type");
   }
 
-  // validate max_length when provided for short_text
+  // validate max_length when provided for short_text or long_text
   if (
     updates.field_type === "short_text" ||
-    current.field_type === "short_text"
+    updates.field_type === "long_text" ||
+    current.field_type === "short_text" ||
+    current.field_type === "long_text"
   ) {
     const newType = updates.field_type ?? current.field_type;
-    const newMax = updates.max_length ?? current.max_length;
-    if (newType === "short_text" && newMax != null) {
+    const newMax =
+      typeof updates.max_length !== "undefined"
+        ? updates.max_length
+        : current.max_length;
+    if (
+      (newType === "short_text" || newType === "long_text") &&
+      newMax != null
+    ) {
       const ml = Number(newMax);
       if (Number.isNaN(ml) || ml <= 0) throw new Error("Invalid max_length");
       if (ml > VARCHAR_MAX_LIMIT) {
@@ -253,6 +276,8 @@ export async function updateFieldForObject(
       typeof updates.default_value !== "undefined"
         ? updates.default_value
         : null,
+    markdown:
+      typeof updates.markdown !== "undefined" ? !!updates.markdown : null,
   });
 
   return {
