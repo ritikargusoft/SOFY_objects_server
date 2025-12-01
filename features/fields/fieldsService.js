@@ -1,8 +1,13 @@
 import * as repo from "./fieldRepository.js";
 
-const VARCHAR_MAX_LIMIT = 1000000000; // match frontend limit
+const VARCHAR_MAX_LIMIT = 1000000000;
 
-function mapFieldTypeToSql(fieldType, maxLength = null) {
+function mapFieldTypeToSql(
+  fieldType,
+  maxLength = null,
+  allowDecimal = false,
+  decimalPlaces = null
+) {
   switch (fieldType) {
     case "short_text": {
       const ml = Number(maxLength) || 255;
@@ -10,7 +15,6 @@ function mapFieldTypeToSql(fieldType, maxLength = null) {
     }
 
     case "long_text": {
-      // if maxLength provided, use VARCHAR(maxLength), otherwise TEXT
       const ml = Number(maxLength);
       if (!Number.isNaN(ml) && ml > 0) {
         return `VARCHAR(${ml})`;
@@ -18,8 +22,15 @@ function mapFieldTypeToSql(fieldType, maxLength = null) {
       return `TEXT`;
     }
 
-    case "number":
-      return "NUMERIC";
+    case "number": {
+      if (allowDecimal) {
+        const dp = Number.isInteger(Number(decimalPlaces))
+          ? Number(decimalPlaces)
+          : 3;
+        return `NUMERIC(38,${dp})`;
+      }
+      return `NUMERIC(38,0)`;
+    }
 
     case "email":
       return "VARCHAR(255)";
@@ -69,6 +80,10 @@ export async function addFieldToObject(
     max_length = null,
     default_value = null,
     markdown = false,
+    min_value = null,
+    max_value = null,
+    allow_decimal = false,
+    decimal_places = null,
   }
 ) {
   if (!field_name) throw new Error("field_name required");
@@ -76,7 +91,7 @@ export async function addFieldToObject(
   if (!field_type) throw new Error("field_type required");
   if (!ALLOWED.includes(field_type)) throw new Error("Invalid field_type");
 
-  // validation for short_text and long_text max_length
+  // validation for short text and long text max length
   if (
     (field_type === "short_text" || field_type === "long_text") &&
     max_length != null
@@ -89,6 +104,31 @@ export async function addFieldToObject(
       throw new Error(
         `Max Length should not be greater than NVARCHAR(MAX) (i.e. ${VARCHAR_MAX_LIMIT})`
       );
+    }
+  }
+
+  // validation for number
+  if (field_type === "number") {
+    if (typeof min_value !== "undefined" && min_value !== null) {
+      const mv = Number(min_value);
+      if (Number.isNaN(mv)) throw new Error("min_value must be a valid number");
+    }
+    if (typeof max_value !== "undefined" && max_value !== null) {
+      const mv = Number(max_value);
+      if (Number.isNaN(mv)) throw new Error("max_value must be a valid number");
+    }
+
+    if (min_value != null && max_value != null) {
+      if (!(Number(min_value) < Number(max_value))) {
+        throw new Error("min_value must be less than max_value");
+      }
+    }
+
+    if (typeof decimal_places !== "undefined" && decimal_places !== null) {
+      const dp = Number(decimal_places);
+      if (Number.isNaN(dp) || !Number.isInteger(dp) || dp < 0 || dp > 10) {
+        throw new Error("Enter a value between 1 and 10");
+      }
     }
   }
 
@@ -116,12 +156,24 @@ export async function addFieldToObject(
           ? 255
           : null
         : null,
-    default_value: default_value ?? null,
+    default_value: typeof default_value !== "undefined" ? default_value : null,
     markdown: !!markdown,
+    min_value: typeof min_value !== "undefined" ? min_value : null,
+    max_value: typeof max_value !== "undefined" ? max_value : null,
+    allow_decimal: !!allow_decimal,
+    decimal_places:
+      typeof decimal_places !== "undefined" && decimal_places !== null
+        ? Number(decimal_places)
+        : null,
   });
 
   const columnName = field_name;
-  const sqlType = mapFieldTypeToSql(field_type, meta.max_length ?? null);
+  const sqlType = mapFieldTypeToSql(
+    field_type,
+    meta.max_length ?? null,
+    !!meta.allow_decimal,
+    meta.decimal_places ?? null
+  );
   const tableExists = await repo.tableExists(tableName);
   if (!tableExists) {
     await repo.createObjectDataTable(tableName);
@@ -170,7 +222,7 @@ export async function updateFieldForObject(
     throw new Error("Invalid field_type");
   }
 
-  // validate max_length when provided for short_text or long_text
+  // validate max length when provided for short text or long_text
   if (
     updates.field_type === "short_text" ||
     updates.field_type === "long_text" ||
@@ -192,6 +244,47 @@ export async function updateFieldForObject(
         throw new Error(
           `Max Length should not be greater than NVARCHAR(MAX) (i.e. ${VARCHAR_MAX_LIMIT})`
         );
+      }
+    }
+  }
+
+  //valdiate number
+
+  const newType = updates.field_type ?? current.field_type;
+  const newMin =
+    typeof updates.min_value !== "undefined"
+      ? updates.min_value
+      : current.min_value;
+
+  const newMax =
+    typeof updates.max_value !== "undefined"
+      ? updates.max_value
+      : current.max_value;
+
+  const newAllow =
+    typeof updates.allow_decimal !== "undefined"
+      ? updates.allow_decimal
+      : current.allow_decimal;
+
+  const newDecimalPlaces =
+    typeof updates.decimal_places !== "undefined"
+      ? updates.decimal_places
+      : current.decimal_places;
+
+  if (newType === "number") {
+    if (newMin != null && Number.isNaN(Number(newMin)))
+      throw new Error("min value must be a number");
+    if (newMax != null && Number.isNaN(Number(newMax)))
+      throw new Error("max value must be a number");
+    if (newMin != null && newMax != null) {
+      if (!(Number(newMin) < Number(newMax)))
+        throw new Error("min value must be less than max value");
+    }
+
+    if (typeof newDecimalPlaces !== "undefined" && newDecimalPlaces !== null) {
+      const dp = Number(newDecimalPlaces);
+      if (Number.isNaN(dp) || !Number.isInteger(dp) || dp < 0 || dp > 10) {
+        throw new Error("decimal places must be between 0 & 1");
       }
     }
   }
@@ -220,7 +313,14 @@ export async function updateFieldForObject(
         else if (renameRes.reason === "old_column_not_found") {
           const sqlType = mapFieldTypeToSql(
             updates.field_type ?? current.field_type,
-            updates.max_length ?? current.max_length
+            updates.max_length ?? current.max_length,
+            typeof updates.allow_decimal !== "undefined"
+              ? updates.allow_decimal
+              : current.allow_decimal,
+
+            typeof updates.decimal_places !== "undefined"
+              ? updates.decimal_places
+              : current.decimal_places
           );
           await repo.addColumnToObjectTable(tableName, newColumn, sqlType);
           ddlResults.addedColumnIfMissing = true;
@@ -231,12 +331,18 @@ export async function updateFieldForObject(
     }
   }
 
-  // handle type change (including max length)
+  // handle type change (including max length, number, decimal )
   if (updates.field_type && tableExists) {
     const targetColumn = newColumn;
     const sqlType = mapFieldTypeToSql(
       updates.field_type,
-      updates.max_length ?? current.max_length
+      updates.max_length ?? current.max_length,
+      typeof updates.allow_decimal !== "undefined"
+        ? updates.allow_decimal
+        : current.allow_decimal,
+      typeof updates.decimal_places !== "undefined"
+        ? updates.decimal_places
+        : current.decimal_places
     );
     try {
       const alterRes = await repo.alterColumnTypeInObjectTable(
@@ -256,7 +362,13 @@ export async function updateFieldForObject(
     const col = updates.name ?? current.name;
     const sqlType = mapFieldTypeToSql(
       updates.field_type ?? current.field_type,
-      updates.max_length ?? current.max_length
+      updates.max_length ?? current.max_length,
+      typeof updates.allow_decimal !== "undefined"
+        ? updates.allow_decimal
+        : current.allow_decimal,
+      typeof updates.decimal_places !== "undefined"
+        ? updates.decimal_places
+        : current.decimal_places
     );
     await repo.addColumnToObjectTable(tableName, col, sqlType);
     ddlResults.addedColumnIfMissing = true;
@@ -278,6 +390,18 @@ export async function updateFieldForObject(
         : null,
     markdown:
       typeof updates.markdown !== "undefined" ? !!updates.markdown : null,
+    min_value:
+      typeof updates.min_value !== "undefined" ? updates.min_value : null,
+    max_value:
+      typeof updates.max_value !== "undefined" ? updates.max_value : null,
+    allow_decimal:
+      typeof updates.allow_decimal !== "undefined"
+        ? !!updates.allow_decimal
+        : null,
+    decimal_places:
+      typeof updates.decimal_places !== "undefined"
+        ? updates.decimal_places
+        : null,
   });
 
   return {

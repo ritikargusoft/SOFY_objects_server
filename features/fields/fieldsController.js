@@ -34,6 +34,10 @@ export async function createField(req, res, next) {
       max_length,
       default_value,
       markdown,
+      min_value,
+      max_value,
+      allow_decimal,
+      decimal_places,
     } = req.body;
     if (!field_name)
       return res.status(400).json({ message: "field_name required" });
@@ -52,6 +56,10 @@ export async function createField(req, res, next) {
       max_length,
       default_value,
       markdown: !!markdown,
+      min_value,
+      max_value,
+      allow_decimal: !!allow_decimal,
+      decimal_places,
     });
 
     if (result.created === false) {
@@ -100,6 +108,10 @@ export async function updateField(req, res, next) {
       max_length,
       default_value,
       markdown,
+      min_value,
+      max_value,
+      allow_decimal,
+      decimal_places,
     } = req.body;
 
     if (
@@ -110,7 +122,11 @@ export async function updateField(req, res, next) {
       !field_order &&
       typeof max_length === "undefined" &&
       typeof default_value === "undefined" &&
-      typeof markdown === "undefined"
+      typeof markdown === "undefined" &&
+      typeof min_value === "undefined" &&
+      typeof max_value === "undefined" &&
+      typeof allow_decimal === "undefined" &&
+      typeof decimal_places === "undefined"
     ) {
       return res.status(400).json({ message: "No updatable fields provided" });
     }
@@ -129,6 +145,10 @@ export async function updateField(req, res, next) {
           max_length,
           default_value,
           markdown,
+          min_value,
+          max_value,
+          allow_decimal,
+          decimal_places,
         },
         req.user?.username ?? "system"
       );

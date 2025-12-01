@@ -11,12 +11,16 @@ export async function insertFieldMetadata({
   max_length = null,
   default_value = null,
   markdown = false,
+  min_value = null,
+  max_value = null,
+  allow_decimal = false,
+  decimal_places = null,
 }) {
   const q = `
     INSERT INTO sph_object_fields
-      (object_uuid, name, label, description, field_type, field_order, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $7, NOW(), $8, $9, $10)
-    RETURNING field_uuid, field_id, object_uuid, name, label, description, field_type, field_order, created_by, created_at, max_length, default_value, markdown;
+      (object_uuid, name, label, description, field_type, field_order, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown, min_value, max_value, allow_decimal, decimal_places)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $7, NOW(), $8, $9, $10, $11, $12, $13, $14)
+    RETURNING field_uuid, field_id, object_uuid, name, label, description, field_type, field_order, created_by, created_at, max_length, default_value, markdown, min_value, max_value, allow_decimal, decimal_places;
   `;
   const r = await pool.query(q, [
     object_uuid,
@@ -29,6 +33,10 @@ export async function insertFieldMetadata({
     max_length,
     default_value,
     markdown,
+    min_value,
+    max_value,
+    allow_decimal,
+    decimal_places,
   ]);
   return r.rows[0] ?? null;
 }
@@ -61,7 +69,7 @@ export async function getNextOrderForObject(object_uuid) {
 
 export async function getFieldsByObject(object_uuid) {
   const q = `
-    SELECT field_uuid, field_id, field_order, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown
+    SELECT field_uuid, field_id, field_order, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown, min_value, max_value, allow_decimal, decimal_places
     FROM sph_object_fields
     WHERE object_uuid = $1
     ORDER BY field_order, field_id;
@@ -72,7 +80,7 @@ export async function getFieldsByObject(object_uuid) {
 
 export async function getFieldByUuid(field_uuid) {
   const q = `
-    SELECT field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown
+    SELECT field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown, min_value, max_value, allow_decimal, decimal_places
     FROM sph_object_fields
     WHERE field_uuid = $1
     LIMIT 1;
@@ -166,6 +174,10 @@ export async function updateFieldMetadata(
     max_length = null,
     default_value = null,
     markdown = null,
+    min_value = null,
+    max_value = null,
+    allow_decimal = null,
+    decimal_places = null,
   }
 ) {
   const q = `
@@ -180,9 +192,13 @@ export async function updateFieldMetadata(
       last_updated_at = NOW(),
       max_length = COALESCE($8, max_length),
       default_value = COALESCE($9, default_value),
-      markdown = COALESCE($10, markdown)
+      markdown = COALESCE($10, markdown),
+      min_value = COALESCE($11, min_value),
+      max_value = COALESCE($12, max_value),
+      allow_decimal = COALESCE($13, allow_decimal),
+      decimal_places = COALESCE($14, decimal_places)
     WHERE field_uuid = $1
-    RETURNING field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown;
+    RETURNING field_uuid, field_id, field_order, object_uuid, name, label, description, field_type, created_by, created_at, last_updated_by, last_updated_at, max_length, default_value, markdown, min_value, max_value, allow_decimal, decimal_places;
   `;
   const r = await pool.query(q, [
     field_uuid,
@@ -195,6 +211,10 @@ export async function updateFieldMetadata(
     max_length ?? null,
     default_value ?? null,
     typeof markdown === "undefined" ? null : markdown,
+    typeof min_value === "undefined" ? null : min_value,
+    typeof max_value === "undefined" ? null : max_value,
+    typeof allow_decimal === "undefined" ? null : allow_decimal,
+    typeof decimal_places === "undefined" ? null : decimal_places,
   ]);
   return r.rows[0] ?? null;
 }
@@ -203,7 +223,7 @@ export async function deleteField(field_uuid) {
   const q = `
     DELETE FROM sph_object_fields
     WHERE field_uuid = $1
-    RETURNING field_uuid, field_id, object_uuid , name, label, max_length, default_value, markdown;
+    RETURNING field_uuid, field_id, object_uuid , name, label, max_length, default_value, markdown, min_value, max_value, allow_decimal, decimal_places;
   `;
   const r = await pool.query(q, [field_uuid]);
   return r.rows[0] ?? null;
